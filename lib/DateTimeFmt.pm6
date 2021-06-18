@@ -23,7 +23,6 @@ constant modifiers = nqp::hash('0', PAD-ZERO, '_', PAD-SPACE, '+', PAD-PLUS, '-'
 constant padding = nqp::hash('0', 0, '1', 1, '2', 2, '3', 3, '4', 4, '5', 5, '6', 6, '7', 7, '8', 8, '9', 9);
 
 # Helper sub that handles padding and transformations.
-# To be merged as .!fmt
 sub inner-fmt(str $text, int $modifier, int $padding) {
     nqp::iseq_i($modifier, NO-PAD)
         ?? $text
@@ -112,9 +111,6 @@ my method fmt ($in) is export {
         nqp::push_s($out,nqp::substr($fmt-str, $pos, $new - $pos));
         $new = $new + 1;
 
-        # Next char
-       # my str $char = '';# = nqp::substr($fmt-str, $new, 1);
-
         # Check that we can get another character, and then see if it's a modifier
         nqp::if(nqp::islt_i($new, $max),
             nqp::stmts(
@@ -148,7 +144,7 @@ my method fmt ($in) is export {
 
         # POSIX/C provide for localized versions formatters, indicated
         # by the prefix of an E or an O.  We only provide the POSIX locale,
-        # so we just acknowledge and ignore.
+        # so we just parse past it if we find it.
         nqp::if(nqp::islt_i($new,$max),
             nqp::stmts(
                 ($char = nqp::substr($fmt-str, $new, 1)),
@@ -186,6 +182,10 @@ my method fmt ($in) is export {
                                     self,
                                     $padding)),
                                     ($new = nqp::add_i($new,1))),
+                        # Bad format.  POSIX/ISO C lists as undefined behavior.
+                        # Implementations are split on how to best handle this.
+                        # Some include the %, some only the text after it.
+                        # We do not.
                         nqp::push_s($out,nqp::substr($fmt-str, $pos, $new - $pos))))));
 
         $pos = $new;
