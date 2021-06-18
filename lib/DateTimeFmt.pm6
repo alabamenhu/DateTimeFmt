@@ -67,6 +67,13 @@ constant formats = nqp::hash(
     'd', nqp::list( PAD-ZERO,  2, *.day.Str ),
     'D', nqp::list( NO-PAD,    0, *.fmt('%m/%d/%y') ),
     'e', nqp::list( PAD-SPACE, 2, *.day.Str ),
+    # Mainly defined in Python's, explicitly defined as microseconds that are left padded.
+    # We use 'f' as perl uses 'F' for a different one
+    'f', nqp::list( PAD-ZERO,  6, { my $s := *.second; nqp::sprintf('%0.0f',nqp::mul_n(nqp::sub_n($s,nqp::floor_n($s)),1000000)) }),
+    'F', nqp::list( NO-PAD,    0, *.fmt('%Y-%m-%d') ),
+    # g/G are non-POSIX
+    'g', nqp::list( PAD-SPACE, 2, { nqp::coerce_is(nqp::div_i(nqp::unbox_i(*.week-year),100)) } ),
+    'G', nqp::list( PAD-SPACE, 2, *.week-year.Str ),
     'h', nqp::list( NO-PAD,    0, { nqp::without(nqp::atpos(b_fmt, nqp::sub_i(nqp::unbox_i(.month), 1)),'') } ),
     'H', nqp::list( PAD-ZERO,  2, { nqp::stmts( (my $h = nqp::without(.?hour,0,.hour)),nqp::coerce_is($h))}),
     'I', nqp::list( PAD-ZERO,  2, { nqp::stmts( (my $h = nqp::mod_i(nqp::without(.?hour,0,.hour),12)),nqp::coerce_is($h ?? $h !! 12))}),
@@ -79,9 +86,14 @@ constant formats = nqp::hash(
     'n', nqp::list( PAD-ZERO,  2, {"\n"} ),
     #'N' is special cased, because the width functions as a max, rather than a minimum width
     'p', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $h = nqp::without(.?hour,0,.hour)),(nqp::islt_i($h,12) ?? 'AM' !! 'PM'))}),
+    # Not POSIX, but common
+    'P', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $h = nqp::without(.?hour,0,.hour)),(nqp::islt_i($h,12) ?? 'am' !! 'pm'))}),
     'r', nqp::list( NO-PAD,    0, *.fmt('%I:%M:%S %p') ),
+    # Not POSIX, but common
+    'R', nqp::list( NO-PAD,    0, *.fmt('%H:%M') ),
     'S', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $s = nqp::without(.?second,0,.second)),nqp::coerce_is(nqp::coerce_ni($s)))}),
     't', nqp::list( NO-PAD,    0, {"\t"} ),
+    'T', nqp::list( NO-PAD,    0, *.fmt('%H:%M:%S') ),
     'u', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(.day-of-week) }),
     'U', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::div_i(nqp::sub_i(nqp::add_i(.day-of-year,6),nqp::mod_i(.day-of-week,7)),7))  }),
     'V', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(.week-number) }),
@@ -92,7 +104,9 @@ constant formats = nqp::hash(
     'y', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::mod_i(.year,100)) }),
     'Y', nqp::list( PAD-ZERO,  4, *.year.Str ),
     'Z', nqp::list( NO-PAD,    0, { nqp::without(.?tz-abbr,'',.tz-abbr)}),
-    '%', nqp::list( NO-PAD,    0, {'%'} )
+    '%', nqp::list( NO-PAD,    0, {'%'} ),
+    # Not POSIX, but common
+    '+', nqp::list( NO-PAD,    0, *.fmt('%a %b %e %H:%M:%S %Z %Y') )
 );
 
 my method fmt ($in) is export {
@@ -180,8 +194,8 @@ my method fmt ($in) is export {
                                 nqp::call(
                                     nqp::getlex('&fmt-nano'),
                                     self,
-                                    $padding)),
-                                    ($new = nqp::add_i($new,1))),
+                                    (nqp::iseq_i($padding,-1),6,$padding))), # default to 6?
+                            ($new = nqp::add_i($new,1))),
                         # Bad format.  POSIX/ISO C lists as undefined behavior.
                         # Implementations are split on how to best handle this.
                         # Some include the %, some only the text after it.
