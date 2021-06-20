@@ -50,8 +50,11 @@ Currently supports all formatters specified by POSIX.
 |  `%y`  | year (last two digits)              |     2 |    zero | POSIX  |   
 |  `%z`  | UTC-style timezone offset           |     4 |    zero | POSIX  |   
 |  `%Z`  | Timezone (or blank if unavailable)  |     4 |    zero | POSIX  |   
+|  `%+`  | short for `%a %b %e %H:%M:%S %Z %Y` |     0 |    zero | POSIX  |   
+|  `%%`  | literal percent                     |     0 |    zero | POSIX  |   
 
 Sources indicated with a **✧** are locale-based ones, and are fixed as they exclusively use the POSIX locale.
+The style `%+` is seen in some implementations (Android, Apple, GNU), which conflicts with the POSIX modifier `+`.  It can only be obtained by way of some other modifier, like `%-+`.
 
 ## Formatting flags
 
