@@ -31,15 +31,15 @@ sub inner-fmt(str $text, int $modifier, int $width) {
                         ($pad-width = nqp::sub_i($width,nqp::chars($text))),
                         nqp::concat(nqp::x(' ',(nqp::islt_i($pad-width,0) ?? 0 !! $pad-width)), $text))
                 !! nqp::iseq_i($modifier, PAD-PLUS) # TODO: and does not begin wih –
-                    ?? nqp::concat(nqp::if(nqp::islt_i(nqp::chars($text),4),'','+'), $text)
+                    ?? nqp::concat(nqp::if(nqp::isle_i(nqp::chars($text),$width),'','+'), $text)
                     !! nqp::iseq_i($modifier, UPPERCASE)
                         ?? nqp::uc($text)
                         !! nqp::iseq_i($modifier, LOWERCASE)
                             ?? nqp::lc($text)
                             !! '' # return blank if bad modifier
 }
-# Nano is not a POSIX one, but is a common extension found.
-# Its formatting is done radically different from others.
+# Nano is not a POSIX one, but is a useful one found in some standards.
+# Its formatting is done radically different from others, as width dictates precision.
 sub fmt-nano(Dateish $d, int $width) {
     my num $s = ($d.?second // 0).Num;
     nqp::substr(
@@ -48,13 +48,6 @@ sub fmt-nano(Dateish $d, int $width) {
             nqp::list(nqp::sub_n($s,nqp::floor_n($s)))),
         2,
         $width)
-}
-
-# Converts potentially negative number string to use actual minus (per standard)
-sub fmt-neg(str $string) {
-    nqp::iseq_s(nqp::substr($string,0,1),'-')
-        ?? nqp::concat('−',nqp::substr($string,1))
-        !! $string
 }
 
 # The default widths here mostly follow what everyone else does.
@@ -79,8 +72,8 @@ my constant formats = nqp::hash(
     'f', nqp::list( PAD-ZERO,  6, { my num $s = nqp::without(.?second,0.Num,.second.Num); nqp::sprintf('%0.0f',nqp::list(nqp::mul_n(nqp::sub_n($s,nqp::floor_n($s)),nqp::coerce_in(1000000)))) }),
     'F', nqp::list( NO-PAD,    0, { .fmt('%+4Y-%m-%d') } ),
     # g/G are non-POSIX
-    'g', nqp::list( PAD-SPACE, 2, { nqp::coerce_is(nqp::div_i(nqp::unbox_i(.week-year),100)) } ),
-    'G', nqp::list( PAD-SPACE, 2, { .week-year.Str } ),
+    'g', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::mod_i(nqp::unbox_i(.week-year),100)) } ),
+    'G', nqp::list( PAD-ZERO,  4, { .week-year.Str } ),
     'h', nqp::list( NO-PAD,    0, { nqp::without(nqp::substr(nqp::atpos(b_fmt, nqp::sub_i(nqp::unbox_i(.month), 1)),0,3),'') } ),
     'H', nqp::list( PAD-ZERO,  2, { nqp::stmts( (my $h := nqp::without(.?hour,0,.hour)),nqp::coerce_is($h))}),
     'I', nqp::list( PAD-ZERO,  2, { nqp::stmts( (my $h := nqp::mod_i(nqp::without(.?hour,0,.hour),12)),nqp::coerce_is($h ?? $h !! 12))}),
@@ -100,7 +93,7 @@ my constant formats = nqp::hash(
     'r', nqp::list( NO-PAD,    0, { .fmt('%I:%M:%S %p') } ),
     # Not POSIX, but common
     'R', nqp::list( NO-PAD,    0, { .fmt('%H:%M') } ),
-    's', nqp::list( PAD-ZERO,  1, { fmt-neg(nqp::coerce_is(nqp::unbox_i(.posix))) }),
+    's', nqp::list( PAD-ZERO,  1, { nqp::coerce_is(nqp::unbox_i(.posix)) }),
     'S', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $s := nqp::without(.?second,0.Num,.second.Num)),nqp::coerce_is(nqp::coerce_ni($s)))}),
     't', nqp::list( NO-PAD,    0, { "\t" } ),
     'T', nqp::list( NO-PAD,    0, { .fmt('%H:%M:%S') } ),
@@ -111,10 +104,10 @@ my constant formats = nqp::hash(
     'W', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::div_i(nqp::sub_i(nqp::add_i(.day-of-year,6),nqp::mod_i(nqp::add_i(.day-of-week,6),7)),7))  }),
     'x', nqp::list( NO-PAD,    0, { .fmt('%m/%d/%y') } ),
     'X', nqp::list( NO-PAD,    0, { .fmt('%H:%M:%S') } ),
-    'y', nqp::list( PAD-ZERO,  2, { fmt-neg(nqp::coerce_is(nqp::mod_i(.year,100))) }),
-    'Y', nqp::list( PAD-ZERO,  4, { fmt-neg(nqp::coerce_is(nqp::unbox_i(.year))) } ),
-    'z', nqp::list( NO-PAD,    0, { my $parts := nqp::list_s(); my $z := nqp::unbox_i(.?offset // 0); nqp::push_s($parts, nqp::islt_i($z,0) ?? '−' !! '+'); $z := nqp::abs_i($z); nqp::push_s($parts,nqp::sprintf('%02d%02d',nqp::list(nqp::div_i($z,3600),nqp::mod_i(nqp::div_i($z,60),60)))); my $s := nqp::mod_i($z,60); nqp::if(nqp::isne_i($s,0),nqp::push_s($parts,nqp::sprintf('%02d',nqp::list($s)))); nqp::join('',$parts) }),
-    'Z', nqp::list( NO-PAD,    0, { nqp::without(.?tz-abbr,'',.tz-abbr)}),
+    'y', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::mod_i(.year,100)) }),
+    'Y', nqp::list( PAD-ZERO,  4, { nqp::coerce_is(nqp::unbox_i(.year)) } ),
+    'z', nqp::list( NO-PAD,    0, { my $z := nqp::unbox_i(.?offset // 0); my $sign := nqp::islt_i($z,0) ?? '-' !! '+'; $z := nqp::abs_i($z); nqp::concat($sign,nqp::sprintf('%02d%02d',nqp::list(nqp::div_i($z,3600),nqp::mod_i(nqp::div_i($z,60),60)))) }),
+    'Z', nqp::list( NO-PAD,    0, { my $z := .?timezone; nqp::without($z, '', ($z ~~ /<alpha>/ ?? $z !! ''))}),
     '%', nqp::list( NO-PAD,    0, { '%' } ),
     # Not POSIX, but common
     '+', nqp::list( NO-PAD,    0, { .fmt('%a %b %e %H:%M:%S %Z %Y') } )
