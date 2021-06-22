@@ -25,7 +25,9 @@ sub inner-fmt(str $text, int $modifier, int $width) {
         !! nqp::iseq_i($modifier, PAD-ZERO)
             ?? nqp::stmts(
                     (my int $pad-width = nqp::sub_i($width,nqp::chars($text))),
-                    nqp::concat(nqp::x('0',(nqp::islt_i($pad-width,0) ?? 0 !! $pad-width)), $text))
+                    nqp::iseq_s(substr($text,0,1),'-')
+                        ?? nqp::concat('-',nqp::concat(nqp::x('0',(nqp::islt_i($pad-width,0) ?? 0 !! $pad-width)), nqp::substr($text,1)))
+                        !! nqp::concat(nqp::x('0',(nqp::islt_i($pad-width,0) ?? 0 !! $pad-width)), $text))
             !! nqp::iseq_i($modifier, PAD-SPACE)
                 ?? nqp::stmts(
                         ($pad-width = nqp::sub_i($width,nqp::chars($text))),
@@ -33,7 +35,7 @@ sub inner-fmt(str $text, int $modifier, int $width) {
                 !! nqp::iseq_i($modifier, PAD-PLUS) # TODO: and does not begin wih –
                     ?? nqp::concat(
                             nqp::if(nqp::isle_i(nqp::chars($text),$width)
-                                 && nqp::isne_s(nqp::substr($text,0,1),'-')
+                                 || nqp::iseq_s(nqp::substr($text,0,1),'-')
                                      ,'',
                                      '+'),
                             $text)
