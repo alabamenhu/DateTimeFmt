@@ -152,17 +152,46 @@ subtest {
 # could, but would not be required to, give a timezone
 # name, without any requirement of format.
 subtest {
+    my class DateTimeZ is DateTime {
+        method timezone {
+            IntStr.new: self.DateTime::timezone , 'America/New_York'
+        }
+        method fmt (|c) {
+            self.DateTime::fmt(|c) # indirection not necessary once in core
+        }
+    }
     my $dateA = DateTime.now.clone:
-        timezone => IntStr.new(-14400, 'America/New_York');
+        timezone => -14400;
     my $dateB = DateTime.now.clone:
-        timezone => Int.new(3600);
+        timezone => 3600;
+    my $dateC = DateTimeZ.now.clone:
+        timezone => -14400;
 
-    # If IntStr were allowed
-    # is $dateA.fmt('%z %Z'), '-0400…America/New_York';
-    # But it's not, so…
-    is $dateA.fmt('%z…%Z'), '-0400…';
-    is $dateB.fmt('%z…%Z'), '+0100…';
+    is $dateA.fmt('%z…%Z'),  '-0400…',                 'Negative numeric timezone only';
+    is $dateB.fmt('%z…%Z'),  '+0100…',                 'Positive numeric timezone only';
+    is $dateC.fmt('%z…%Z'),  '-0400…America/New_York', 'Separately named timezone';
+    is $dateC.fmt('%z…%^Z'), '-0400…AMERICA/NEW_YORK', 'Separately named timezone, upper case modifier';
+    is $dateC.fmt('%z…%#Z'), '-0400…america/new_york', 'Separately named timezone, lower case modifier';
 
 }, 'Timezone formatting';
+
+# Negative values are only possible for the various years
+# and the numeric timezone formatters.  The negative should
+# always appear, and should take the place of the '+' when
+# using a + modifier.
+subtest {
+    my $dateA = DateTime.new: :year(-1234), :1month, :1day, :1hour, :1minute, :1second, :timezone(-5678);
+    my $dateB = $dateA.clone: :timezone(-0);
+
+    is $dateA.fmt('%Y'),   '-1234',   'Minus sign appears for negative year';
+    is $dateA.fmt('%+3Y'), '-1234',   'Minus sign overrides plus with + formatter';
+    is $dateA.fmt('%05Y'), '-1234',   'Minus sound counts for part of the padding';
+    is $dateA.fmt('%+6Y'), '-1234',   'Minus sign appears with + formatter without extra padding';
+    is $dateA.fmt('%07Y'), '-001234', 'Zero padding should go after minus sign';
+    is $dateA.fmt('%z'),   '-0134',   'Minus appears for negative timezone';
+    is $dateA.fmt('%+3z'), '-0134',   'Minus appears with + formatter';
+    is $dateA.fmt('%+6z'), '-0134',   'Minus appears with + formatter without extra padding';
+    is $dateB.fmt('%z'),   '+0000',   'Zero offset timezone is *always* counted as "positive"';
+}, 'Negative values';
 
 done-testing;
