@@ -31,7 +31,12 @@ sub inner-fmt(str $text, int $modifier, int $width) {
                         ($pad-width = nqp::sub_i($width,nqp::chars($text))),
                         nqp::concat(nqp::x(' ',(nqp::islt_i($pad-width,0) ?? 0 !! $pad-width)), $text))
                 !! nqp::iseq_i($modifier, PAD-PLUS) # TODO: and does not begin wih –
-                    ?? nqp::concat(nqp::if(nqp::isle_i(nqp::chars($text),$width),'','+'), $text)
+                    ?? nqp::concat(
+                            nqp::if(nqp::isle_i(nqp::chars($text),$width)
+                                 && nqp::isne_s(nqp::substr($text,0,1),'-')
+                                     ,'',
+                                     '+'),
+                            $text)
                     !! nqp::iseq_i($modifier, UPPERCASE)
                         ?? nqp::uc($text)
                         !! nqp::iseq_i($modifier, LOWERCASE)
@@ -58,59 +63,274 @@ sub fmt-nano(Dateish $d, int $width) {
 # should use an iffy accessor (.?foo) and provide a default value.
 # s, and year times may be negative
 my constant formats = nqp::hash(
-    'a', nqp::list( NO-PAD,    0, { nqp::without(nqp::substr(nqp::atpos(a_fmt, nqp::sub_i(nqp::unbox_i(.day-of-week), 1)),0,3),'') } ),
-    'A', nqp::list( NO-PAD,    0, { nqp::without(nqp::atpos(a_fmt, nqp::sub_i(nqp::unbox_i(.day-of-week), 1)),'') } ),
-    'b', nqp::list( NO-PAD,    0, { nqp::without(nqp::substr(nqp::atpos(b_fmt, nqp::sub_i(nqp::unbox_i(.month), 1)),0,3),'') } ),
-    'B', nqp::list( NO-PAD,    0, { nqp::without(nqp::atpos(b_fmt, nqp::sub_i(nqp::unbox_i(.month), 1)),'') } ),
-    'c', nqp::list( NO-PAD,    0, { .fmt('%a %b %e %H:%M:%S %Y') } ),
-    'C', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::div_i(nqp::unbox_i(.year),100)) } ),
-    'd', nqp::list( PAD-ZERO,  2, { .day.Str } ),
-    'D', nqp::list( NO-PAD,    0, { .fmt('%m/%d/%y') } ),
-    'e', nqp::list( PAD-SPACE, 2, { .day.Str } ),
-    # Mainly defined in Python's, explicitly defined as microseconds that are left padded.
-    # We use 'f' as perl uses 'F' for a different one
-    'f', nqp::list( PAD-ZERO,  6, { my num $s = nqp::without(.?second,0.Num,.second.Num); nqp::sprintf('%0.0f',nqp::list(nqp::mul_n(nqp::sub_n($s,nqp::floor_n($s)),nqp::coerce_in(1000000)))) }),
-    'F', nqp::list( NO-PAD,    0, { .fmt('%+4Y-%m-%d') } ),
-    # g/G are non-POSIX
-    'g', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::mod_i(nqp::unbox_i(.week-year),100)) } ),
-    'G', nqp::list( PAD-ZERO,  4, { .week-year.Str } ),
-    'h', nqp::list( NO-PAD,    0, { nqp::without(nqp::substr(nqp::atpos(b_fmt, nqp::sub_i(nqp::unbox_i(.month), 1)),0,3),'') } ),
-    'H', nqp::list( PAD-ZERO,  2, { nqp::stmts( (my $h := nqp::without(.?hour,0,.hour)),nqp::coerce_is($h))}),
-    'I', nqp::list( PAD-ZERO,  2, { nqp::stmts( (my $h := nqp::mod_i(nqp::without(.?hour,0,.hour),12)),nqp::coerce_is($h ?? $h !! 12))}),
-    'j', nqp::list( PAD-ZERO,  3, { nqp::unbox_s(.day-of-year.Str) } ),
+    'a', # Abbreviated day of the week, word-based
+    nqp::list(NO-PAD, 0, {
+            nqp::substr(
+                nqp::without(
+                    nqp::atpos(a_fmt,nqp::sub_i(nqp::callmethod($_,'day-of-week'),1)),
+                    ''),
+                0,3)
+    }),
+    'A', # Day of the week, word-based
+    nqp::list(NO-PAD, 0, {
+            nqp::without(
+                nqp::atpos(a_fmt,nqp::sub_i(nqp::callmethod($_,'day-of-week'),1)),
+                '')
+    }),
+    'b', # Abbreviated month of the year, word-based
+    nqp::list(NO-PAD, 0, {
+            nqp::substr(
+                nqp::without(
+                    nqp::atpos(b_fmt, nqp::sub_i(nqp::callmethod($_,'month'), 1)),
+                    ''),
+                0,3)
+    }),
+    'B', # Month of the year, word-based
+    nqp::list(NO-PAD, 0, {
+            nqp::without(
+                nqp::atpos(b_fmt, nqp::sub_i(nqp::callmethod($_,'month'), 1)),
+                '')
+    }),
+    'c', # Extended format
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_,'fmt','%a %b %e %H:%M:%S %Y')
+    }),
+    'C', # Century
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(nqp::div_i(nqp::callmethod($_,'year'),100))
+    }),
+    'd', # Day as digits
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(nqp::callmethod($_,'day'))
+    }),
+    'D', # Month-day-year, slash separated
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_,'fmt','%m/%d/%y')
+    }),
+    'e', # Day as digit(s), spaced padded
+    nqp::list(PAD-SPACE, 2, {
+            nqp::coerce_is(nqp::callmethod($_,'day'))
+    }),
+    # Mainly defined in Python's strftime, explicitly defined as microseconds that are left padded.
+    # We use 'f' as POSIX uses 'F' for a different one
+    'f',
+    nqp::list(PAD-ZERO, 6, {
+            my num $s = nqp::tryfindmethod($_,'second')
+                    ?? nqp::callmethod(nqp::callmethod($_,'second'),'Num')
+                    !! 0;
+            $s = nqp::mul_n(
+                    nqp::sub_n($s,nqp::floor_n($s)),
+                    nqp::coerce_in(1000000));
+            nqp::sprintf('%0.0f',nqp::list($s));
+    }),
+    'F', # Year/month/day, hyphen separated
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_,'fmt','%+4Y-%m-%d')
+    }),
+    'g', # ISO week year, final two digits
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(nqp::mod_i(nqp::callmethod($_,'week-year'),100))
+    }),
+    'G', # ISO Week-year, full
+    nqp::list(PAD-ZERO, 4, {
+            nqp::coerce_is(nqp::callmethod($_,'week-year'))
+    }),
+    'h', # Abbreviated month, text form; identical to %b
+    nqp::list(NO-PAD, 0, {
+            nqp::substr(
+                nqp::without(
+                    nqp::atpos(b_fmt, nqp::sub_i(nqp::callmethod($_,'month'), 1)),
+                    ''),
+                0,3)
+    }),
+    'H', # Hour of day, twenty-four hour format
+    nqp::list(PAD-ZERO, 2, {
+            nqp::tryfindmethod($_,'hour')
+                    ?? nqp::coerce_is(nqp::callmethod($_,'hour'))
+                    !! '0';
+    }),
+    'I', # Hour of day, twelve hour format
+    nqp::list(PAD-ZERO, 2, {
+            nqp::tryfindmethod($_,'hour')
+                    ?? nqp::coerce_is(nqp::mod_i(nqp::callmethod($_,'hour'),12))
+                    !! '12'
+    }),
+    'j', # Day of year
+    nqp::list(PAD-ZERO, 3, {
+            nqp::coerce_is(nqp::callmethod($_,'day-of-year'))
+    }),
     # k and l are non-POSIX but common
-    'k', nqp::list( PAD-SPACE, 2, { nqp::stmts( (my $h := nqp::without(.?hour,0,.hour)),nqp::coerce_is($h))}),
-    'l', nqp::list( PAD-SPACE, 2, { nqp::stmts( (my $h := nqp::mod_i(nqp::without(.?hour,0,.hour),12)),nqp::coerce_is($h ?? $h !! 12))}),
+    'k', # Hours of day, twenty-four hour format, space padded
+    nqp::list(PAD-SPACE, 2, {
+            nqp::tryfindmethod($_,'hour')
+                ?? nqp::coerce_is(nqp::callmethod($_,'hour'))
+                !! '0'
+           # nqp::stmts( (my $h := nqp::without(.?hour,0,.hour)),nqp::coerce_is($h))
+    }),
+    'l', # Hours of day, twelve hour format, space padded.
+    nqp::list(PAD-SPACE, 2, {
+            nqp::tryfindmethod($_,'hour')
+                ?? nqp::coerce_is(nqp::mod_i(nqp::callmethod($_,'hour'),12))
+                !! '12'
+    }),
     # Ruby (and a few others) use L for mi*LL*iseconds
-    'L', nqp::list( PAD-ZERO,  3, { my num $s = nqp::without(.?second,0.Num,.second.Num); nqp::sprintf('%0.0f',nqp::list(nqp::mul_n(nqp::sub_n($s,nqp::floor_n($s)),nqp::coerce_in(1000)))) }),
-    'm', nqp::list( PAD-ZERO,  2, { nqp::unbox_s(.month.Str) } ),
-    'M', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $m := nqp::without(.?minute,0,.minute)),nqp::coerce_is($m))}),
-    'n', nqp::list( NO-PAD  ,  0, { "\n" } ),
+    'L', # Millesconds as whole number
+    nqp::list(PAD-ZERO, 3, {
+            my num $s = nqp::tryfindmethod($_,'second')
+                    ?? nqp::callmethod(nqp::callmethod($_,'second'),'Num')
+                    !! 0;
+            $s = nqp::mul_n(
+                    nqp::sub_n($s,nqp::floor_n($s)),
+                    nqp::coerce_in(1000));
+            nqp::sprintf('%0.0f',nqp::list($s));
+    }),
+    'm',
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(nqp::callmethod($_,'month'))
+    }),
+    'M',
+    nqp::list(PAD-ZERO, 2, {
+            nqp::tryfindmethod($_,'minute')
+                ?? nqp::coerce_is(nqp::callmethod($_,'minute'))
+                !! '0'
+    }),
+    'n',
+    nqp::list(NO-PAD, 0, {
+            "\n"
+    }),
     #'N' is special cased, because the width functions as a max, rather than a minimum width
-    'p', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $h := nqp::without(.?hour,0,.hour)),(nqp::islt_i($h,12) ?? 'AM' !! 'PM'))}),
+    'p', # AM/PM marker, uppercase
+    nqp::list(PAD-ZERO, 2, {
+            nqp::islt_i(
+                nqp::tryfindmethod($_,'hour')
+                        ?? nqp::callmethod($_,'hour')
+                        !! 0,
+                12)
+                    ?? 'AM'
+                    !! 'PM'
+    }),
     # Not POSIX, but common
-    'P', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $h := nqp::without(.?hour,0,.hour)),(nqp::islt_i($h,12) ?? 'am' !! 'pm'))}),
-    'r', nqp::list( NO-PAD,    0, { .fmt('%I:%M:%S %p') } ),
+    'P', # AM/PM marker, lowercase
+    nqp::list(PAD-ZERO, 2, {
+            nqp::islt_i(
+                nqp::tryfindmethod($_,'hour')
+                        ?? nqp::callmethod($_,'hour')
+                        !! 0,
+                12)
+                    ?? 'am'
+                    !! 'pm'
+    }),
+    'r',
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_, 'fmt','%I:%M:%S %p')
+    }),
     # Not POSIX, but common
-    'R', nqp::list( NO-PAD,    0, { .fmt('%H:%M') } ),
-    's', nqp::list( PAD-ZERO,  1, { nqp::coerce_is(nqp::unbox_i(.posix)) }),
-    'S', nqp::list( PAD-ZERO,  2, { nqp::stmts((my $s := nqp::without(.?second,0.Num,.second.Num)),nqp::coerce_is(nqp::coerce_ni($s)))}),
-    't', nqp::list( NO-PAD,    0, { "\t" } ),
-    'T', nqp::list( NO-PAD,    0, { .fmt('%H:%M:%S') } ),
-    'u', nqp::list( PAD-ZERO,  1, { nqp::coerce_is(.day-of-week) }),
-    'U', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::div_i(nqp::sub_i(nqp::add_i(.day-of-year,6),nqp::mod_i(.day-of-week,7)),7))  }),
-    'V', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(.week-number) }),
-    'w', nqp::list( PAD-ZERO,  1, { nqp::coerce_is(nqp::mod_i(.day-of-week,7)) }),
-    'W', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::div_i(nqp::sub_i(nqp::add_i(.day-of-year,6),nqp::mod_i(nqp::add_i(.day-of-week,6),7)),7))  }),
-    'x', nqp::list( NO-PAD,    0, { .fmt('%m/%d/%y') } ),
-    'X', nqp::list( NO-PAD,    0, { .fmt('%H:%M:%S') } ),
-    'y', nqp::list( PAD-ZERO,  2, { nqp::coerce_is(nqp::mod_i(.year,100)) }),
-    'Y', nqp::list( PAD-ZERO,  4, { nqp::coerce_is(nqp::unbox_i(.year)) } ),
-    'z', nqp::list( NO-PAD,    0, { my $z := nqp::unbox_i(.?offset // 0); my $sign := nqp::islt_i($z,0) ?? '-' !! '+'; $z := nqp::abs_i($z); nqp::concat($sign,nqp::sprintf('%02d%02d',nqp::list(nqp::div_i($z,3600),nqp::mod_i(nqp::div_i($z,60),60)))) }),
-    'Z', nqp::list( NO-PAD,    0, { my $z := .?timezone; nqp::without($z, '', ($z ~~ /<alpha>/ ?? $z !! ''))}),
-    '%', nqp::list( NO-PAD,    0, { '%' } ),
-    # Not POSIX, but common
-    '+', nqp::list( NO-PAD,    0, { .fmt('%a %b %e %H:%M:%S %Z %Y') } )
+    'R', nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_, 'fmt','%H:%M')
+    }),
+    's', # Seconds from UNIX epoch
+    nqp::list(PAD-ZERO, 1, {
+            nqp::coerce_is(nqp::callmethod($_,'posix'))
+    }),
+    'S', nqp::list(PAD-ZERO, 2, {
+            nqp::stmts((my $s := nqp::without(.?second,0.Num,.second.Num)),nqp::coerce_is(nqp::coerce_ni($s)))
+    }),
+    't', # Literal tab
+    nqp::list(NO-PAD, 0, {
+            "\t"
+    }),
+    'T', # Hour-minute-second format, colon separated
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_,'fmt','%H:%M:%S')
+    }),
+    'u', # Day of the week, 1 (Monday) - 7 (Sunday)
+    nqp::list(PAD-ZERO, 1, {
+            nqp::coerce_is(nqp::callmethod($_,'day-of-week'))
+    }),
+    'U', # Week of week-year: 0 (days before first Sunday), 1 (Starts with first Sunday) - 53
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(
+                nqp::div_i(
+                    nqp::sub_i(
+                        nqp::add_i(nqp::callmethod($_,'day-of-year'),6),
+                        nqp::mod_i(nqp::callmethod($_,'day-of-week'),7)),
+                    7))
+    }),
+    'V', # Week of week-year, ISO: 1 (first week with four days in January, Monday-based) - 53
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(nqp::callmethod($_,'week-number'))
+    }),
+    'w', # Day of week, 0 (Sunday) - 6 (Saturday)
+    nqp::list(PAD-ZERO, 1, {
+            nqp::coerce_is(nqp::mod_i(nqp::callmethod($_,'day-of-week'),7))
+    }),
+    'W', # Week of week-year: 0 (days before first Monday), 1 (Starts with first Monday) - 53
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(
+                nqp::div_i(
+                    nqp::sub_i(
+                        nqp::add_i(nqp::callmethod($_,'day-of-year'),6),
+                        nqp::mod_i(
+                            nqp::add_i(nqp::callmethod($_,'day-of-week'),6),
+                            7)),
+                    7))
+    }),
+    'x', # Month-day-year, slash separated
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_,'fmt','%m/%d/%y')
+    }),
+    'X', # Hour-minute-second, colon separated
+    nqp::list(NO-PAD, 0, {
+            nqp::callmethod($_,'fmt','%H:%M:%S')
+    }),
+    'y', # Year, final two digits
+    nqp::list(PAD-ZERO, 2, {
+            nqp::coerce_is(nqp::mod_i(nqp::callmethod($_,'year'),100))
+    }),
+    'Y', # Year
+    nqp::list(PAD-ZERO, 4, {
+        nqp::coerce_is(nqp::callmethod($_,'year')) } ),
+    'z', # Timezone, offset format
+    nqp::list(NO-PAD, 0, {
+            my int $z =
+                    nqp::tryfindmethod($_,'offset')
+                        ?? nqp::callmethod($_,'offset')
+                        !! 0;
+            # Zero is, per relevant standards, always considered positive
+            my str $sign = nqp::islt_i($z,0) ?? '-' !! '+';
+            $z = nqp::abs_i($z);
+            nqp::concat(
+                    $sign,
+                    nqp::sprintf(
+                        '%02d%02d',
+                        nqp::list(
+                            nqp::div_i($z,3600),
+                            nqp::mod_i(nqp::div_i($z,60),60))))
+    }),
+    'Z', # Named timezone
+    nqp::list(NO-PAD, 0, {
+            # Named timezones don't exist per se in Raku core.  However, they could be
+            # enabled in module space.  As an extremely rough heuristic to see if we've
+            # received a named timezone, we check for the existence of a letter in its
+            # stringified form and that string if so.  Otherwise, if we could not
+            # determine the timezone *name* per the standard, we return a blank string.
+            my $z =
+                    nqp::callmethod(
+                            nqp::tryfindmethod($_,'timezone')
+                                    ?? nqp::callmethod($_,'timezone')
+                                    !! '',
+                            'Str');
+            $z ~~ /<alpha>/ ?? $z !! ''
+                  #           ?? '.?timezone; nqp::without($z, '', ($z ~~ /<alpha>/ ?? $z !! ''))
+    }),
+    '%', # Literal percent
+    nqp::list(NO-PAD, 0, {
+            '%'
+    }),
+    '+', # Extended format (common prior to the + modifier, still in some utilities)
+    nqp::list( NO-PAD, 0, {
+        nqp::callmethod($_,'fmt','%a %b %e %H:%M:%S %Z %Y')
+    })
 );
 
 my method fmt ($in) is export {
@@ -127,8 +347,8 @@ my method fmt ($in) is export {
 
         # Add the literal text up to the '%'
         nqp::push_s($out,nqp::substr($fmt-str, $pos, $new - $pos));
-        $pos = $new;     # Move up $pos, but advance our temporary location
-        $new = $new + 1; # Advance temporary
+        $pos = $new;
+        $new = $new + 1;
 
         # Check that we can get another character, and then see if it's a modifier
         nqp::if(nqp::islt_i($new, $max),
