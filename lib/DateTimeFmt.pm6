@@ -12,14 +12,14 @@ my int constant LOWERCASE  = 5;
 # my int constant LOCAL-O    = 7; unused in current implementation
 
 # Putting digits in a hash makes for easy comparison avoiding combining characters and makes math easier.
-constant padding   = nqp::hash('0', 0, '1', 1, '2', 2, '3', 3, '4', 4, '5', 5, '6', 6, '7', 7, '8', 8, '9', 9);
-constant modifiers = nqp::hash('0', PAD-ZERO, '_', PAD-SPACE, '+', PAD-PLUS, '-', NO-PAD, '^', UPPERCASE, '#', LOWERCASE);
+my constant padding   = nqp::hash('0', 0, '1', 1, '2', 2, '3', 3, '4', 4, '5', 5, '6', 6, '7', 7, '8', 8, '9', 9);
+my constant modifiers = nqp::hash('0', PAD-ZERO, '_', PAD-SPACE, '+', PAD-PLUS, '-', NO-PAD, '^', UPPERCASE, '#', LOWERCASE);
 my constant a_fmt  = nqp::list('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday','Sunday');
 my constant b_fmt  = nqp::list('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
         'October', 'November', 'December');
 
 # Helper sub that handles padding and transformations.
-sub inner-fmt(str $text, int $modifier, int $width) {
+sub inner-fmt(str $text, int $modifier, int $width --> str) {
     nqp::iseq_i($modifier, NO-PAD)
         ?? $text
         !! nqp::iseq_i($modifier, PAD-ZERO)
@@ -47,12 +47,16 @@ sub inner-fmt(str $text, int $modifier, int $width) {
 }
 # Nano is not a POSIX one, but is a useful one found in some standards.
 # Its formatting is done radically different from others, as width dictates precision.
-sub fmt-nano(Dateish $d, int $width) {
-    my num $s = ($d.?second // 0).Num;
+sub fmt-nano(Dateish $d, int $width --> str) {
+    my num $s = nqp::tryfindmethod($d, 'second')
+            ?? nqp::callmethod(nqp::callmethod($d, 'second'),'Num')
+            !! 0;
     nqp::substr(
         nqp::sprintf(
-            nqp::join('',nqp::list('%.',nqp::coerce_is($width),'f')),
-            nqp::list(nqp::sub_n($s,nqp::floor_n($s)))),
+            '%.*f',
+            nqp::list(
+                nqp::coerce_is($width),
+                nqp::sub_n($s,nqp::floor_n($s)))),
         2,
         $width)
 }
@@ -234,8 +238,11 @@ my constant formats = nqp::hash(
     nqp::list(PAD-ZERO, 1, {
             nqp::coerce_is(nqp::callmethod($_,'posix'))
     }),
-    'S', nqp::list(PAD-ZERO, 2, {
-            nqp::stmts((my $s := nqp::without(.?second,0.Num,.second.Num)),nqp::coerce_is(nqp::coerce_ni($s)))
+    'S', # Seconds in minute
+    nqp::list(PAD-ZERO, 2, {
+            nqp::tryfindmethod($_,'second') # May give [Fat]Rat, in which case we get Rat→Num→int→str
+                    ?? nqp::coerce_is(nqp::coerce_ni(nqp::callmethod(nqp::callmethod($_,'second'),'Num')))
+                    !! '0'
     }),
     't', # Literal tab
     nqp::list(NO-PAD, 0, {
@@ -316,7 +323,7 @@ my constant formats = nqp::hash(
             # received a named timezone, we check for the existence of a letter in its
             # stringified form and that string if so.  Otherwise, if we could not
             # determine the timezone *name* per the standard, we return a blank string.
-            my $z =
+            my $z :=
                     nqp::callmethod(
                             nqp::tryfindmethod($_,'timezone')
                                     ?? nqp::callmethod($_,'timezone')
