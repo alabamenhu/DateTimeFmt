@@ -2,7 +2,7 @@ use DateTimeFmt;
 
 my $dateA = DateTime.new:
         :1234year, :5month, :6day,
-        :7hour, :8minute, second => 9.012345678,
+        :7hour, :8minute, second => 9.012345678.Num, # Seconds can be Rat, Num, or Int
         :0123timezone;
 my $dateB = DateTime.new:
         :9876year, :12month, :31day,
